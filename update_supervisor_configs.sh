@@ -28,7 +28,7 @@ for config_file in ${CONFIG_DIR}/*.json; do
 #!/bin/bash
 source /opt/miniconda/etc/profile.d/conda.sh
 conda activate passivbot-env
-python /opt/passivbot/passivbot.py ${exchange} ${symbol} ${config_file} --leverage 30
+python /opt/passivbot/passivbot.py ${exchange} ${symbol} ${config_file} --leverage 100
 EOT
 
     # Ensure the script is executable
