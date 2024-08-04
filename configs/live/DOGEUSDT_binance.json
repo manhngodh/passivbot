@@ -2,7 +2,7 @@
     "config_name": "recursive_grid_DOGEUSDT_1351days",
     "logging_level": 0,
     "long": {
-        "auto_unstuck_delay_minutes": 1440.0,
+        "auto_unstuck_delay_minutes": 5,
         "auto_unstuck_ema_dist": -0.04571713049205213,
         "auto_unstuck_qty_pct": 0.01,
         "auto_unstuck_wallet_exposure_threshold": 0.1,
@@ -18,7 +18,7 @@
         "n_close_orders": 3,
         "rentry_pprice_dist": 0.020284013718220993,
         "rentry_pprice_dist_wallet_exposure_weighting": 0.5869222448102802,
-        "wallet_exposure_limit": 1.0
+        "wallet_exposure_limit": 0.5
     },
     "short": {
         "auto_unstuck_delay_minutes": 450.53379111166583,
@@ -37,6 +37,6 @@
         "n_close_orders": 8,
         "rentry_pprice_dist": 0.030679665955788686,
         "rentry_pprice_dist_wallet_exposure_weighting": 17.706665164050598,
-        "wallet_exposure_limit": 1.0
+        "wallet_exposure_limit": 0.5
     }
 }

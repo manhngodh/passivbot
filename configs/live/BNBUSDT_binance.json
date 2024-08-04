@@ -1,8 +1,8 @@
 {"config_name": "recursive_grid_BNBUSDT_454days",
  "logging_level": 0,
- "long": {"auto_unstuck_delay_minutes": 1074.8171536337609,
-          "auto_unstuck_ema_dist": 0.0026546226284388103,
-          "auto_unstuck_qty_pct": 0.01,
+ "long": {"auto_unstuck_delay_minutes": 5.8171536337609,
+          "auto_unstuck_ema_dist": -0.001,
+          "auto_unstuck_qty_pct": 0.5,
           "auto_unstuck_wallet_exposure_threshold": 0.0631531453829155,
           "backwards_tp": false,
           "ddown_factor": 1.9518030704652767,
@@ -16,7 +16,7 @@
           "n_close_orders": 7,
           "rentry_pprice_dist": 0.02610099907707397,
           "rentry_pprice_dist_wallet_exposure_weighting": 0.5510354907621502,
-          "wallet_exposure_limit": 1},
+          "wallet_exposure_limit": 0.5},
  "short": {"auto_unstuck_delay_minutes": 856.3697732146902,
            "auto_unstuck_ema_dist": -0.03368464816024436,
            "auto_unstuck_qty_pct": 0.07135938346346171,
@@ -33,4 +33,4 @@
            "n_close_orders": 15,
            "rentry_pprice_dist": 0.019913769476118816,
            "rentry_pprice_dist_wallet_exposure_weighting": 8.409147856251824,
-           "wallet_exposure_limit": 1.0}}
+           "wallet_exposure_limit": 0.5}}
