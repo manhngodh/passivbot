@@ -112,7 +112,11 @@ def calculate_margin_ratio(positions, total_balance):
 
 def main():
     while True:
-        fetch_and_notify()
+        try:
+            fetch_and_notify()
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            send_telegram_message(f"An error occurred: {e}")
         time.sleep(120)  # Wait for 1 minute before fetching data again
 
 if __name__ == "__main__":
