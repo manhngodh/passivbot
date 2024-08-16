@@ -56,8 +56,6 @@ from typing import Union, Dict, List
 import websockets
 import logging
 
-from utils import config as config_u
-
 TEST_MODE_SUPPORTED_EXCHANGES = ["bybit", "binance"]
 ema_period = 99
 
