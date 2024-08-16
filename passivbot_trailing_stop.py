@@ -605,11 +605,13 @@ class Bot:
         # --- Trailing Stop Implementation ---
         if self.position["long"]["size"] != 0.0:
             # Calculate trailing stop price for long position
-            self.trailing_stop_price_long = max(self.trailing_stop_price_long,
-                                                self.position["long"]["price"] * (1 - self.trailing_stop_percentage_long / 100))
+            self.trailing_stop_price_long = max(
+                self.trailing_stop_price_long,
+                self.position["long"]["price"] * (1 - self.trailing_stop_percentage_long)
+            )
             # Check if price has crossed below the trailing stop
             if self.price < self.trailing_stop_price_long:
-                logging.info("Trailing Stop triggered for Long Position!")
+                logging.info(f"Trailing Stop triggered for Long Position {self.position['long']['price']} => {self.price}!")
                 # Reduce by qty_step (or the remaining position size, whichever is smaller)
                 reduction_qty = min(abs(self.position["long"]["size"]), self.xk['qty_step'])
                 # Place market order to reduce long position
@@ -621,15 +623,18 @@ class Bot:
                     'reduce_only': True,
                     'custom_id': 'trailing_stop_long'
                 })
-                self.trailing_stop_price_long = self.price * (1 - self.trailing_stop_percentage_long / 100)  # Update trailing stop
+                # Update trailing stop
+                self.trailing_stop_price_long = self.price * (1 - self.trailing_stop_percentage_long)
 
         if self.position["short"]["size"] != 0.0:
             # Calculate trailing stop price for short position
-            self.trailing_stop_price_short = min(self.trailing_stop_price_short,
-                                                self.position["short"]["price"] * (1 + self.trailing_stop_percentage_short / 100))
+            self.trailing_stop_price_short = min(
+                self.trailing_stop_price_short,
+                self.position["short"]["price"] * (1 + self.trailing_stop_percentage_short)
+            )
             # Check if price has crossed above the trailing stop
             if self.price > self.trailing_stop_price_short:
-                logging.info("Trailing Stop triggered for Short Position!")
+                logging.info(f"Trailing Stop triggered for Short Position {self.position['short']['price']} => {self.price}!")
                 # Reduce by qty_step (or the remaining position size, whichever is smaller)
                 reduction_qty = min(abs(self.position["short"]["size"]), self.xk['qty_step'])
                 # Place market order to reduce short position
@@ -641,7 +646,9 @@ class Bot:
                     'reduce_only': True,
                     'custom_id': 'trailing_stop_short'
                 })
-                self.trailing_stop_price_short = self.price * (1 + self.trailing_stop_percentage_short / 100)  # Update trailing stop
+                # Update trailing stop
+                self.trailing_stop_price_short = self.price * (1 + self.trailing_stop_percentage_short)
+
         if self.long_mode == "panic":
             if psize_long != 0.0:
                 orders.append(
