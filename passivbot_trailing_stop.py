@@ -55,7 +55,6 @@ from typing import Union, Dict, List
 
 import websockets
 import logging
-import talib
 
 from utils import config as config_u
 
@@ -1171,97 +1170,6 @@ class Bot:
         )
         return res
 
-    async def handle_abnormal_volume_and_price_drop(self):
-        """Handles abnormal volume and significant price drop by reducing long position."""
-        try:
-            # 1. Fetch Recent OHLCV Data 
-            ohlcv_data = await self.fetch_ohlcvs(interval="1h", limit=10) # Adjust timeframe/limit as needed
-            ohlcv_data = np.array(ohlcv_data) 
-
-            # 2. Check for Abnormal Volume
-            if config_u.detect_abnormal_volume(ohlcv_data, volume_threshold=2.0): # Adjust threshold as needed
-                
-                # 3. Calculate Price Drop Percentage 
-                latest_close = ohlcv_data[-1, 4]  
-                previous_close = ohlcv_data[-2, 4]
-                price_drop_percentage = (previous_close - latest_close) / previous_close * 100
-
-                # 4. Check for Significant Price Drop
-                if price_drop_percentage >= 3.0: # Adjust price drop threshold as needed 
-                    logging.warning(f"Significant price drop ({price_drop_percentage:.2f}%) with abnormal volume detected! Reducing long position.")
-
-                    # 5. Calculate Reduction Quantity
-                    long_position_size = self.position['long']['size']
-                    reduction_quantity = long_position_size * 0.5  # Reduce by 50% (adjust as needed)
-                    reduction_quantity = round_(reduction_quantity, self.qty_step)
-
-                    # 6. Place Market Order to Reduce Position
-                    if reduction_quantity > 0:
-                        order = {
-                            'side': 'sell',
-                            'position_side': 'long',
-                            'qty': reduction_quantity,
-                            'type': 'market',  # Use a market order for immediate execution
-                            'reduce_only': True, 
-                            'custom_id': 'abnormal_vol_price_drop_reduction'
-                        }
-                        await self.create_orders([order]) # Create the order
-
-        except Exception as e:
-            logging.error(f"Error handling abnormal volume and price drop: {e}")
-            
-    async def determine_market_trend(self, ema_period=99):
-        """Determines the market trend based on the 99 EMA on the 1h timeframe and current price action."""
-        try:
-            ohlcvs = await self.fetch_ohlcvs(interval="1h", limit=ema_period + 1)
-            closes = [x['close'] for x in ohlcvs]  # Get closing prices
-            ema_values = talib.EMA(np.array(closes), timeperiod=ema_period)
-            current_ema = ema_values[-1]
-            current_price = closes[-1]
-
-            # Determine trend based on price crossing the EMA
-            if current_price > current_ema:
-                self.market_trend = "uptrend"
-            elif current_price < current_ema:
-                self.market_trend = "downtrend"
-            else:
-                self.market_trend = "sideways"  # Optional: if no clear trend is determined
-
-            logging.info(f"Market trend: {self.market_trend}")
-
-        except Exception as e:
-            logging.error(f"Error determining market trend: {e}")
-            self.market_trend = "unknown"  # Default to unknown
-
-    async def adjust_parameters_to_trend(self):
-        """Adjusts strategy parameters based on the detected market trend."""
-        if self.market_trend == "uptrend":
-            if  self.xk["do_long"]:
-                # --- Uptrend Parameter Settings ---
-                self.xk["initial_qty_pct"] = (0.05, 0.05)  # Example: Increase initial qty
-                self.xk["ddown_factor"] = (0.7, 0.7)      # Example: Wider grid
-                # ... add other uptrend adjustments for self.xk ...
-            if  self.xk["do_short"]:
-                self.xk["initial_qty_pct"] = (0.01, 0.01)  # Example: Decrease initial qty
-                self.xk["ddown_factor"] = (0.3, 0.3)      # Example: Tighter grid
-                self.xk["n_close_orders"] = (1, 1)
-                # ... add other downtrend adjustments for self.xk ...
-
-        elif self.market_trend == "downtrend":
-            if  self.xk["do_long"]:
-                # --- Downtrend Parameter Settings ---
-                self.xk["initial_qty_pct"] = (0.01, 0.01)  # Example: Decrease initial qty
-                self.xk["ddown_factor"] = (0.3, 0.3)      # Example: Tighter grid
-                self.xk["n_close_orders"] = (1, 1)
-                # ... add other downtrend adjustments for self.xk ...
-            if  self.xk["do_short"]:
-                # --- Downtrend Parameter Settings ---
-                self.xk["initial_qty_pct"] = (0.05, 0.05)  # Example: Decrease initial qty
-                self.xk["ddown_factor"] = (0.7, 0.7)      # Example: Tighter grid
-                # ... add other downtrend adjustments for self.xk ...
-        else: 
-            logging.warning("Market trend is unknown. Using default parameters.")
-        print("adjust_parameter_to_trend", self.xk)
             # ... (You can add default parameter settings here) ...
     async def on_minute_mark(self):
         # called each whole minute
@@ -1324,13 +1232,7 @@ class Bot:
         except Exception as e:
             logging.error(f"error on minute mark {e}")
             traceback.print_exc()
-            
-        # try:
-        #     await self.determine_market_trend()
-        #     await self.adjust_parameters_to_trend()
-        # except Exception as e:
-        #     logging.error(f"error determining market trend and adjusting parameters {e}")
-        #     traceback.print_exc()
+
 
     def order_is_valid(self, order: dict) -> bool:
         # perform checks to detect abnormal orders
