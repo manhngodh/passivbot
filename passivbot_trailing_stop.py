@@ -1325,12 +1325,12 @@ class Bot:
             logging.error(f"error on minute mark {e}")
             traceback.print_exc()
             
-        try:
-            await self.determine_market_trend()
-            await self.adjust_parameters_to_trend()
-        except Exception as e:
-            logging.error(f"error determining market trend and adjusting parameters {e}")
-            traceback.print_exc()
+        # try:
+        #     await self.determine_market_trend()
+        #     await self.adjust_parameters_to_trend()
+        # except Exception as e:
+        #     logging.error(f"error determining market trend and adjusting parameters {e}")
+        #     traceback.print_exc()
 
     def order_is_valid(self, order: dict) -> bool:
         # perform checks to detect abnormal orders
