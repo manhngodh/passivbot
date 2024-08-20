@@ -47,7 +47,7 @@ def set_leverage(symbol, leverage):
         logging.error(f'Error setting leverage: {str(e)}')
 
 # Fetch existing positions
-def fetch_position(symbol):
+def fetch_positions(symbol):
     try:
         positions = exchange.fetch_positions([symbol])
         for position in positions:
@@ -209,7 +209,7 @@ def reentry_order(filled_order, reentry_distance_pct):
 
 # Synchronize with Binance to handle existing positions and orders
 def synchronize_with_binance(symbol):
-    position = fetch_position(symbol)
+    positions = fetch_positions(symbol)
 
     if position:
         # Check if the position matches the current configuration (e.g., leverage, size, entry price)
@@ -230,13 +230,13 @@ def synchronize_with_binance(symbol):
 """
 if position long exist => if SL/TP not exist => place SL/TP for long  or SL exsit but TP not exist => place TP or SL not exist but TP exist => place SL
 otherwise => place initial orders
-if position short exist => if SL/TP not exist => place SL/TP for long or SL exsit but TP not exist => place TP or SL not exist but TP exist => place SL
+if position short exist => if SL/TP not exist => place SL/TP for short or SL exsit but TP not exist => place TP or SL not exist but TP exist => place SL
 otherwise => place initial orders
 
 if position long exist => the SL of long order filled => close long TP order and place reentry long order
                        => the TP of long order filled => close longSL order and place reentry long order
-if position sell exist => the SL of sell order filled => close sell TP order and place reentry sell order
-                       => the TP of sell order filled => close sell order and place reentry sell order
+if position short exist => the SL of short order filled => close short TP order and place reentry short order
+                       => the TP of short order filled => close short order and place reentry short order
 """
 # Main bot loop
 def run_bot():
@@ -248,63 +248,65 @@ def run_bot():
 
     while True:
         try:
-            # Check the position and take actions if needed
-            position = fetch_position(symbol)
-
+            positions = fetch_positions(symbol)
+            open_orders = fetch_open_orders(symbol)
+            # check if positions exist or not
+            
+            for position in positions:
+                if position['side'] == 'long':
+                    sl_exists = any(order['type'] == 'stop_market' and order['side'] == 'sell' for order in open_orders)
+                    tp_exists = any(order['type'] == 'take_profit_market' and order['side'] == 'sell' for order in open_orders)
+                    if not sl_exists:
+                        # create sl for long
+                        pass
+                    if not tp_exists:
+                        # create tp for long
+                        pass
+                elif position['side'] == 'short':
+                    sl_exists = any(order['type'] == 'stop_market' and order['side'] == 'buy' for order in open_orders)
+                    tp_exists = any(order['type'] == 'take_profit_market' and order['side'] == 'buy' for order in open_orders)
+                    if not sl_exists:
+                        # create sl for shord
+                        pass
+                    if not tp_exists:
+                        # create tp for long
+                        pass
             if position:
                 logging.info(f'Position detected: {position}')
-                open_orders = fetch_open_orders(symbol)
-                if not open_orders:
-                    # Place SL/TP if not present
-                    # place_stop_loss_take_profit(position)
-                    # Place SL and TP for the filled order
-                    stop_loss_order, take_profit_order = place_stop_loss_take_profit(position)
+                sl_exists = any(order['type'] == 'stop_market' for order in open_orders)
+                tp_exists = any(order['type'] == 'take_profit_market' for order in open_orders)
+
+                # Monitor for SL/TP fills and handle them
+                closed_orders = exchange.fetch_closed_orders(symbol)
+                for order in closed_orders:
+                    if order['status'] == 'closed':
+                        if sl_exists and order['type'] == 'stop_market':
+                            logging.info(f'SL order filled: {order}')
+                            cancel_remaining_order(next(o['id'] for o in open_orders if o['type'] == 'limit'))
+                            reentry_order(position, sl_reentry_distance_pct)
+                        elif tp_exists and order['type'] == 'limit':
+                            logging.info(f'TP order filled: {order}')
+                            cancel_remaining_order(next(o['id'] for o in open_orders if o['type'] == 'stop_market'))
+                            reentry_order(position, tp_reentry_distance_pct)
             else:
                 logging.info('No position detected, waiting for new fills.')
-
-            # Monitor for SL/TP triggers and handle them
-            while position:
-                closed_orders = exchange.fetch_closed_orders(symbol)
-                triggered_order = None
-                if position and open_orders:
-                    if open_orders and any(order['status'] == 'closed' for order in open_orders):
-                        triggered_order = next(order for order in open_orders if order['status'] == 'closed')
-                if triggered_order:
-                    logging.info(f'SL or TP triggered: {triggered_order}')
-
-                    # Cancel the other SL/TP order (if still open)
-                    opposite_order = [order for order in open_orders if order['id'] != triggered_order['id']][0]
-                    if opposite_order and opposite_order['status'] != 'closed':
-                        cancel_remaining_order(opposite_order)
-
-                    # Place reentry order
-                    new_order = reentry_order(position, sl_reentry_distance_pct if triggered_order == stop_loss_order else tp_reentry_distance_pct)
-                    position = None
-                    break
 
             time.sleep(1)  # Sleep for a short time before checking again
 
         except Exception as e:
             logging.error(f'Error in bot loop: {str(e)}')
             time.sleep(5)  # Sleep before retrying in case of error
-
 if __name__ == "__main__":
     logging.info('Starting trading bot')
     run_bot()
-    
-take_profit_order = exchange.create_limit_buy_order(
-    symbol,
-    amount=1,
-    price=18,
-    params={"order_tag": "buy_A", "positionSide": "LONG"}
-)
-buy + SHORT => close short sl => short
-# sl long
-tp_order = exchange.create_order(symbol, 'STOP_MARKET', 'sell', 1, None, {'stopPrice': 17, "positionSide": "LONG"})
-# tp long
-tp_order = exchange.create_order(symbol, 'TAKE_PROFIT_MARKET', 'sell', 1, None, {'stopPrice': 25, "positionSide": "LONG"})
 
-# sl long
-tp_order = exchange.create_order(symbol, 'STOP_MARKET', 'buy', 1, None, {'stopPrice': 30, "positionSide": "SHORT"})
-# tp long
-tp_order = exchange.create_order(symbol, 'TAKE_PROFIT_MARKET', 'buy', 1, None, {'stopPrice': 19, "positionSide": "SHORT"})
+def test():
+    # sl long
+    tp_order = exchange.create_order(symbol, 'STOP_MARKET', 'sell', 1, None, {'stopPrice': 17, "positionSide": "LONG"})
+    # tp long
+    tp_order = exchange.create_order(symbol, 'TAKE_PROFIT_MARKET', 'sell', 1, None, {'stopPrice': 25, "positionSide": "LONG"})
+
+    # sl short
+    tp_order = exchange.create_order(symbol, 'STOP_MARKET', 'buy', 1, None, {'stopPrice': 30, "positionSide": "SHORT"})
+    # tp short
+    tp_order = exchange.create_order(symbol, 'TAKE_PROFIT_MARKET', 'buy', 1, None, {'stopPrice': 19, "positionSide": "SHORT"})
