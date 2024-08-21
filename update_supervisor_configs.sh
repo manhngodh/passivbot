@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CONFIG_DIR="/opt/passivbot/configs/live"
+CONFIG_DIR="/home/manhngodh/passivbot/configs/live"
 SUPERVISOR_CONFIG_DIR="/etc/supervisor/conf.d"
 
 # Clear existing Supervisor configurations for passivbot
@@ -21,14 +21,14 @@ for config_file in ${CONFIG_DIR}/*.json; do
     fi
 
     # Construct the script path
-    script_path="/opt/passivbot/start_passivbot_${symbol}_${exchange}.sh"
+    script_path="/home/manhngodh/passivbot/start_passivbot_${symbol}_${exchange}.sh"
     
     # Create a wrapper script for each symbol and exchange
     cat <<EOT > ${script_path}
 #!/bin/bash
-source /opt/miniconda/etc/profile.d/conda.sh
+source /home/manhngodh/miniconda/etc/profile.d/conda.sh
 conda activate passivbot-env
-python /opt/passivbot/passivbot.py ${exchange} ${symbol} ${config_file} --leverage 100
+python /home/manhngodh/passivbot/passivbot.py ${exchange} ${symbol} ${config_file} --leverage 100
 EOT
 
     # Ensure the script is executable
@@ -38,7 +38,7 @@ EOT
     sudo bash -c "cat <<EOT > ${SUPERVISOR_CONFIG_DIR}/passivbot_${symbol}_${exchange}.conf
 [program:passivbot_${symbol}_${exchange}]
 command=${script_path}
-directory=/opt/passivbot
+directory=/home/manhngodh/passivbot
 autostart=true
 autorestart=true
 stderr_logfile=/var/log/passivbot_${symbol}_${exchange}.err.log
