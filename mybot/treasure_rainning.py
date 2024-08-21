@@ -3,16 +3,16 @@ import os
 import time
 import logging
 from dotenv import load_dotenv
+import traceback
 
 # Load environment variables
 load_dotenv()
 
 # Set up logging
 logging.basicConfig(
-    filename='trading_bot.log',
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
-)
+    )
 
 # Initialize Binance for futures trading
 exchange = ccxt.binance({
@@ -27,9 +27,8 @@ exchange = ccxt.binance({
 
 # Constants
 symbol = 'AVAXUSDT'  # Trading pair
-initial_distance_pct = 0.01  # Initial distance between orders (1%)
-sl_reentry_distance_pct = 0.01  # SL reentry distance (1%)
-tp_reentry_distance_pct = 0.01  # TP reentry distance (1%)
+initial_distance_pct = 0.005  # Initial distance between orders (1%)
+max_distance_pct = 0.03  # Maximum distance between orders (5%)
 stop_loss_buffer_pct = 0.005  # Stop-loss buffer (0.5%)
 take_profit_buffer_pct = 0.015  # Take-profit buffer (1%)
 order_size = 2  # Order size (in BTC)
@@ -48,45 +47,25 @@ def set_leverage(symbol, leverage):
 
 # Fetch existing positions
 def fetch_positions(symbol):
+    positions = []
     try:
         positions = exchange.fetch_positions([symbol])
         for position in positions:
             if position['symbol'] == symbol and float(position['contracts']) > 0:
-                logging.info(f'Existing position found: {position}')
-                return position
-        return None
+                positions.append(position)
+        return positions
     except Exception as e:
         logging.error(f'Error fetching position: {str(e)}')
-        return None
+        return positions
 
 # Fetch open orders
 def fetch_open_orders(symbol):
     try:
         open_orders = exchange.fetch_open_orders(symbol)
-        logging.info(f'Open orders: {open_orders}')
         return open_orders
     except Exception as e:
         logging.error(f'Error fetching open orders: {str(e)}')
         return []
-
-# Close all positions and cancel all orders
-def close_all_positions_and_orders(symbol):
-    try:
-        # Cancel all open orders
-        open_orders = fetch_open_orders(symbol)
-        for order in open_orders:
-            exchange.cancel_order(order['id'], symbol)
-            logging.info(f'Canceled order: {order["id"]}')
-
-        # Close the position if it exists
-        position = fetch_position(symbol)
-        if position:
-            side = 'sell' if position['side'] == 'long' else 'buy'
-            close_order = exchange.create_market_order(symbol, side, position['contracts'])
-            logging.info(f'Closed position: {close_order}')
-
-    except Exception as e:
-        logging.error(f'Error closing positions or canceling orders: {str(e)}')
 
 # Utility function to get current price
 def get_current_price():
@@ -97,135 +76,47 @@ def get_current_price():
 def calculate_price(base_price, percentage):
     return base_price * (1 + percentage)
 
-# Place initial buy and sell limit orders
-def place_initial_orders():
-    current_price = get_current_price()
-    logging.info(f'Current price: {current_price}')
-
-    # Calculate prices for orders based on percentages
-    buy_price = calculate_price(current_price, -initial_distance_pct)
-    sell_price = calculate_price(current_price, initial_distance_pct)
-
-    logging.info(f'Placing initial buy limit order at {buy_price} and sell limit order at {sell_price}')
-
-    # Place buy limit order
-    buy_order = exchange.create_limit_buy_order(symbol, order_size, buy_price)
-    logging.info(f'Buy limit order placed: {buy_order}')
-
-    # Place sell limit order
-    sell_order = exchange.create_limit_sell_order(symbol, order_size, sell_price)
-    logging.info(f'Sell limit order placed: {sell_order}')
-
-    return buy_order, sell_order
-
-# Place stop-loss and take-profit orders after a limit order is filled
-def place_stop_loss_take_profit(filled_order):
-    order_type = 'buy' if filled_order['side'] == 'buy' else 'sell'
-    logging.info(f'Placing SL/TP for the {order_type} order.')
-
-    try:
-        # Calculate stop-loss and take-profit prices
-        stop_loss_price = calculate_price(filled_order['price'], -stop_loss_buffer_pct) if order_type == 'buy' else calculate_price(filled_order['price'], stop_loss_buffer_pct)
-        take_profit_price = calculate_price(filled_order['price'], take_profit_buffer_pct) if order_type == 'buy' else calculate_price(filled_order['price'], -take_profit_buffer_pct)
-
-        if order_type == 'buy':
-            stop_loss_order = exchange.create_order(
-                symbol,
-                type='stop_market',
-                side='sell',
-                amount=filled_order['amount'],
-                price=None,  # Market order
-                params={
-                    "stopPrice": stop_loss_price,
-                    "positionSide": "LONG"
-                }
-            )
-            take_profit_order = exchange.create_order(
-                symbol,
-                type='take_profit_market',
-                side='sell',
-                amount=filled_order['amount'],
-                price=None,  # Market order
-                params={
-                    "stopPrice": take_profit_price,
-                    "positionSide": "LONG"
-                }
-            )
-        else:
-            stop_loss_order = exchange.create_order(
-                symbol,
-                type='stop_market',
-                side='buy',
-                amount=filled_order['amount'],
-                price=None,  # Market order
-                params={
-                    "stopPrice": stop_loss_price,
-                    "positionSide": "SHORT"
-                }
-            )
-            take_profit_order = exchange.create_order(
-                symbol,
-                type='take_profit_market',
-                side='buy',
-                amount=filled_order['amount'],
-                price=None,  # Market order
-                params={
-                    "stopPrice": take_profit_price,
-                    "positionSide": "SHORT"
-                }
-            )
-
-        logging.info(f'SL and TP orders placed: SL at {stop_loss_price}, TP at {take_profit_price}')
-        return stop_loss_order, take_profit_order
-
-    except Exception as e:
-        logging.error(f'Error placing stop-loss/take-profit: {str(e)}')
-        return None, None
-
 # Cancel remaining SL or TP order after one is triggered
-def cancel_remaining_order(order):
+def cancel_order(order):
     try:
         exchange.cancel_order(order['id'], symbol)
-        logging.info(f'Canceled remaining SL/TP order: {order}')
     except Exception as e:
         logging.error(f'Error canceling order: {str(e)}')
 
-# Reentry logic after SL or TP is hit
-def reentry_order(filled_order, reentry_distance_pct):
-    order_type = 'buy' if filled_order['side'] == 'buy' else 'sell'
-    trigger_price = filled_order['price']
-    new_price = calculate_price(trigger_price, -reentry_distance_pct) if order_type == 'buy' else calculate_price(trigger_price, reentry_distance_pct)
+# Function to log essential order details
+def log_essential_orders(message, orders):
+    logging.info(message)
+    for order in orders:
+        logging.info(
+            f"Order ID: {order['id']}, "
+            f"Side: {order['side'].capitalize()}, "
+            f"Type: {order['type'].replace('_', ' ').title()}, "
+            f"Price: {order['price'] if order['price'] else 'Market'}, "
+            f"Qty: {order['amount']}, "
+            f"Status: {order['status'].capitalize()}"
+        )
 
-    logging.info(f'Reentry order type: {order_type}, New price: {new_price}')
+# Function to log essential order details
+def log_essential_order(order):
+    logging.info(
+        f"Order ID: {order['id']}, "
+        f"Side: {order['side'].capitalize()}, "
+        f"Type: {order['type'].replace('_', ' ').title()}, "
+        f"Price: {order['price'] if order['price'] else 'Market'}, "
+        f"Qty: {order['amount']}, "
+        f"Status: {order['status'].capitalize()}"
+    )
 
-    if order_type == 'buy':
-        new_order = exchange.create_limit_buy_order(symbol, order_size, new_price)
-        logging.info(f'Buy reentry order placed at {new_price}: {new_order}')
-    else:
-        new_order = exchange.create_limit_sell_order(symbol, order_size, new_price)
-        logging.info(f'Sell reentry order placed at {new_price}: {new_order}')
-
-    return new_order
-
-# Synchronize with Binance to handle existing positions and orders
-def synchronize_with_binance(symbol):
-    positions = fetch_positions(symbol)
-
-    if position:
-        # Check if the position matches the current configuration (e.g., leverage, size, entry price)
-        # If not, close the position and cancel all orders
-        logging.info('Position found, checking configuration...')
-        open_orders = fetch_open_orders(symbol)
-        if not open_orders:
-            # If no open orders are found, create SL and TP orders for the existing position
-            logging.info('No SL/TP orders found, creating them...')
-            place_stop_loss_take_profit(position)
-        else:
-            logging.info('Position and orders are in sync.')
-    else:
-        logging.info('No open positions found, placing initial orders...')
-        place_initial_orders()
-
+# Function to log essential position details
+def log_essential_position(message, position):
+    logging.info(message)
+    logging.info(
+        f"Side: {position['side'].capitalize()}, "
+        f"Qty: {position['contracts']}, "
+        f"Entry: {position['entryPrice']}, "
+        f"Mark: {position['markPrice']}, "
+        f"Unrealized PnL: {position['unrealizedPnl']}"
+    )
 
 """
 if position long exist => if SL/TP not exist => place SL/TP for long  or SL exsit but TP not exist => place TP or SL not exist but TP exist => place SL
@@ -242,60 +133,115 @@ if position short exist => the SL of short order filled => close short TP order 
 def run_bot():
     # Set leverage before running the bot
     set_leverage(symbol, leverage)
-
-    # Synchronize with Binance
-    synchronize_with_binance(symbol)
-
+    logging.info(f'Starting the bot for {symbol} with leverage {leverage}x')
     while True:
+        logging.info('Checking for new opportunities...')
         try:
+            current_price = get_current_price()
             positions = fetch_positions(symbol)
             open_orders = fetch_open_orders(symbol)
+            log_essential_orders('Open orders:', open_orders)
             # check if positions exist or not
-            
+            if not any(position['side'] == 'long' for position in positions):
+                # check SL and TP for long position, because there no position so they would be closed
+                redundent_orders = list(filter(lambda order: order['side'] == 'sell' and (order['type'] == 'take_profit_market' or order['type'] == 'stop_market'), open_orders))
+                if redundent_orders:
+                    for order in redundent_orders:
+                        cancel_order(order)
+                    log_essential_orders('Long redundent orders are closed:', redundent_orders)
+                
+                long_orders = [order for order in open_orders if order['side'] == 'buy' and order['type'] == 'limit']
+                # no long position exist => place initial long order
+                if not any(long_orders):
+                    long_price = calculate_price(current_price, -initial_distance_pct)
+                    long_order = exchange.create_limit_buy_order(symbol, order_size, long_price, params={'positionSide': 'LONG'})
+                    log_essential_orders(f'Buy limit order placed because no order before:', [long_order])
+                else: # no long position exist but existed long order too far from current price => cancel long order and place new long order
+                    for order in long_orders:
+                        if abs(order['price'] - current_price) > max_distance_pct * current_price:
+                            cancel_order(order)
+                            long_price = calculate_price(current_price, -initial_distance_pct)
+                            long_order = exchange.create_limit_buy_order(symbol, order_size, long_price, params={'positionSide': 'LONG'})
+                            log_essential_orders(f'Buy limit order placed because old order outdated:', [long_order])
+                
+            if not any(position['side'] == 'short' for position in positions):
+                # check SL and TP for short position, because there no position so they would be closed
+                redundent_orders = list(filter(lambda order: order['side'] == 'buy' and (order['type'] == 'take_profit_market' or order['type'] == 'stop_market'), open_orders))
+                if redundent_orders:
+                    for order in redundent_orders:
+                        cancel_order(order)
+                    log_essential_orders('Short redundent orders are closed:', redundent_orders)
+
+                short_order = [order for order in open_orders if order['side'] == 'sell' and order['type'] == 'limit']
+                # no short position exist => place initial short order
+                if not any(order['side'] == 'sell' for order in open_orders):
+                    short_price = calculate_price(current_price, initial_distance_pct)
+                    short_order = exchange.create_limit_sell_order(symbol, order_size, short_price, params={'positionSide': 'SHORT'})
+                    log_essential_orders(f'Sell limit order placed because no order before:', [short_order])
+                else: # no short position exist but existed short order  too far from current price => cancel short order and place new short order
+                    for order in short_order:
+                        if abs(order['price'] - current_price) > max_distance_pct * current_price:
+                            cancel_order(order)
+                            short_price = calculate_price(current_price, initial_distance_pct)
+                            short_order = exchange.create_limit_sell_order(symbol, order_size, short_price, params={'positionSide': 'SHORT'})
+                            log_essential_orders(f'Sell limit order placed because old order outdated:', [short_order])
+
             for position in positions:
+                log_essential_position('Position:', position)
+                entry_price = float(position['info']['entryPrice'])
+                quantity = abs(float(position['info']['positionAmt']))
                 if position['side'] == 'long':
+                    # if the position is ecceeded the stop loss => cancel the position
+                    if position['unrealizedProfit'] < -stop_loss_buffer_pct * entry_price * quantity:
+                        exchange.create_market_sell_order(symbol, quantity, params={'positionSide': 'LONG'})
+                        log_essential_position(f'Long position closed because of stop loss:', position)
+                        continue
+                    order_params = {
+                        "positionSide": "LONG"
+                    }
+                    
                     sl_exists = any(order['type'] == 'stop_market' and order['side'] == 'sell' for order in open_orders)
                     tp_exists = any(order['type'] == 'take_profit_market' and order['side'] == 'sell' for order in open_orders)
                     if not sl_exists:
                         # create sl for long
-                        pass
+                        stop_loss_price = calculate_price(entry_price, -stop_loss_buffer_pct)
+                        order_params['stopPrice'] = stop_loss_price
+                        stop_loss_order = exchange.create_order(symbol, 'stop_market', 'sell', quantity, params=order_params)
+                        log_essential_orders(f'Stop loss order placed for long position:', [stop_loss_order])
                     if not tp_exists:
                         # create tp for long
-                        pass
+                        take_profit_price = calculate_price(entry_price, take_profit_buffer_pct)
+                        order_params['stopPrice' ] = take_profit_price
+                        take_profit_order = exchange.create_order(symbol, 'take_profit_market', 'sell', quantity, params=order_params)
+                        log_essential_orders(f'Take profit order placed for long position:', [take_profit_order])
                 elif position['side'] == 'short':
+                    # if the position is ecceeded the stop loss => cancel the position
+                    if position['unrealizedProfit'] < -stop_loss_buffer_pct * entry_price * quantity:
+                        exchange.create_market_buy_order(symbol, quantity, params={'positionSide': 'SHORT'})
+                        log_essential_position(f'Short position closed because of stop loss:', position)
+                        continue
+                    order_params = {
+                        "positionSide": "SHORT"
+                    }
                     sl_exists = any(order['type'] == 'stop_market' and order['side'] == 'buy' for order in open_orders)
                     tp_exists = any(order['type'] == 'take_profit_market' and order['side'] == 'buy' for order in open_orders)
                     if not sl_exists:
-                        # create sl for shord
-                        pass
+                        # create sl for short
+                        stop_loss_price = calculate_price(entry_price, stop_loss_buffer_pct)
+                        order_params['stopPrice'] = stop_loss_price
+                        stop_loss_order = exchange.create_order(symbol, 'stop_market', 'buy', quantity, params=order_params)
+                        log_essential_orders(f'Stop loss order placed for short position:', [stop_loss_order])
                     if not tp_exists:
-                        # create tp for long
-                        pass
-            if position:
-                logging.info(f'Position detected: {position}')
-                sl_exists = any(order['type'] == 'stop_market' for order in open_orders)
-                tp_exists = any(order['type'] == 'take_profit_market' for order in open_orders)
-
-                # Monitor for SL/TP fills and handle them
-                closed_orders = exchange.fetch_closed_orders(symbol)
-                for order in closed_orders:
-                    if order['status'] == 'closed':
-                        if sl_exists and order['type'] == 'stop_market':
-                            logging.info(f'SL order filled: {order}')
-                            cancel_remaining_order(next(o['id'] for o in open_orders if o['type'] == 'limit'))
-                            reentry_order(position, sl_reentry_distance_pct)
-                        elif tp_exists and order['type'] == 'limit':
-                            logging.info(f'TP order filled: {order}')
-                            cancel_remaining_order(next(o['id'] for o in open_orders if o['type'] == 'stop_market'))
-                            reentry_order(position, tp_reentry_distance_pct)
-            else:
-                logging.info('No position detected, waiting for new fills.')
-
-            time.sleep(1)  # Sleep for a short time before checking again
-
+                        # create tp for short
+                        take_profit_price = calculate_price(entry_price, -take_profit_buffer_pct)
+                        order_params['stopPrice' ] = take_profit_price
+                        take_profit_order = exchange.create_order(symbol, 'take_profit_market', 'buy', quantity, params=order_params)
+                        log_essential_orders(f'Take profit order placed for short position:', [take_profit_order])
+            time.sleep(30)
         except Exception as e:
             logging.error(f'Error in bot loop: {str(e)}')
-            time.sleep(5)  # Sleep before retrying in case of error
+            logging.error(traceback.format_exc())
+            time.sleep(360)  # Sleep before retrying in case of error
 if __name__ == "__main__":
     logging.info('Starting trading bot')
     run_bot()
