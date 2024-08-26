@@ -147,6 +147,8 @@ class Bot:
         self.process_websocket_ticks = True
 
         self.custom_id_max_length = 36
+        
+        self.waiting_for_price_to_return = False
 
     def set_config(self, config):
         for k, v in [
@@ -161,6 +163,7 @@ class Bot:
             ("countdown", False),
             ("countdown_offset", 0),
             ("ohlcv", True),
+            ("max_price_distance_from_ema", 0.07)
         ]:
             if k not in config:
                 config[k] = v
@@ -585,7 +588,31 @@ class Bot:
         pprice_long = self.position["long"]["price"]
         psize_short = self.position["short"]["size"]
         pprice_short = self.position["short"]["price"]
+        
+        current_price = self.price
+        ema_long = min(self.emas_long)
+        ema_short = max(self.emas_short)
 
+        # Calculate the percentage difference between the current price and EMA
+        price_diff_long = abs(current_price - ema_long) / ema_long
+        price_diff_short = abs(current_price - ema_short) / ema_short
+
+        if price_diff_long > self.config["max_price_distance_from_ema"] or \
+            price_diff_short > self.config["max_price_distance_from_ema"]:
+            # If price is too far from EMA, close all orders and set flag
+            if not self.waiting_for_price_to_return:
+                logging.info(f"Price moved too far from EMA. Closing all orders and waiting for price to return. {price_diff_long} | {price_diff_short}")
+                asyncio.create_task(self.cancel_orders(self.open_orders))
+                self.waiting_for_price_to_return = True
+            return []
+        # If the price has returned closer to EMA, allow new orders to be created
+        if self.waiting_for_price_to_return and \
+            price_diff_long <= self.config["max_price_distance_from_ema"] and \
+            price_diff_short <= self.config["max_price_distance_from_ema"]:
+            logging.info(f"Price has moved closer to EMA. Resuming normal order operations. {price_diff_long} | {price_diff_short}")
+            self.waiting_for_price_to_return = False
+        if  self.waiting_for_price_to_return:
+            return []
         if self.hedge_mode:
             do_long = self.do_long or psize_long != 0.0
             do_short = self.do_short or psize_short != 0.0
@@ -1000,6 +1027,9 @@ class Bot:
             return
         self.ts_locked["cancel_and_create"] = time.time()
         try:
+            if self.waiting_for_price_to_return:
+                logging.info(f"Skipping order creation because the price is too far from EMA.")
+                return []
             if any(self.error_halt.values()):
                 logging.warning(
                     f"warning:  error in rest api fetch {self.error_halt}, "
@@ -1662,6 +1692,18 @@ class Bot:
             )[: self.custom_id_max_length]
             new_orders.append(order)
         return new_orders
+    
+    def log_price_vs_ema(self):
+        current_price = self.price
+        ema_long = min(self.emas_long)
+        ema_short = max(self.emas_short)
+
+        price_diff_long = abs(current_price - ema_long) / ema_long
+        price_diff_short = abs(current_price - ema_short) / ema_short
+
+        logging.info(f"Price: {current_price}, EMA Long: {ema_long}, EMA Short: {ema_short}")
+        logging.info(f"Price distance from EMA Long: {price_diff_long:.4f}, EMA Short: {price_diff_short:.4f}")
+
 
 
 async def start_bot(bot):
