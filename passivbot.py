@@ -1,4 +1,7 @@
 import os
+import dotenv
+
+dotenv.load_dotenv()
 
 if "NOJIT" not in os.environ:
     os.environ["NOJIT"] = "true"

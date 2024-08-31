@@ -1,3 +1,4 @@
+import os
 import asyncio
 import hashlib
 import hmac
@@ -19,6 +20,7 @@ class BinanceBot(Bot):
         self.exchange = "binance"
         self.max_n_orders_per_batch = 5
         self.max_n_cancellations_per_batch = 10
+        self.proxy = os.getenv("PROXY_URL", None)  # Add proxy attribute
         super().__init__(config)
         self.session = aiohttp.ClientSession()
         self.base_endpoint = ""
@@ -29,6 +31,7 @@ class BinanceBot(Bot):
             async with self.session.get(
                 (self.base_endpoint if base_endpoint is None else base_endpoint) + url,
                 params=params,
+                proxy=self.proxy  # Use proxy
             ) as response:
                 result = await response.text()
             return json.loads(result)
@@ -69,13 +72,13 @@ class BinanceBot(Bot):
             ).hexdigest()
             if data_:
                 async with getattr(self.session, type_)(
-                    base_endpoint + url, data=params, headers=self.headers
+                    base_endpoint + url, data=params, headers=self.headers, proxy=self.proxy  # Use proxy
                 ) as response:
                     result = await response.text()
             else:
                 params_encoded = urlencode(params)
                 async with getattr(self.session, type_)(
-                    base_endpoint + url, params=params_encoded, headers=self.headers
+                    base_endpoint + url, params=params_encoded, headers=self.headers, proxy=self.proxy  # Use proxy
                 ) as response:
                     result = await response.text()
 
