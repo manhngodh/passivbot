@@ -1,6 +1,6 @@
 {
   symbols: [
-   "1000SATSUSDT",
+   "MATICUSDT",
   ]
   # harmony search optimization parameters
   n_harmonies: 32
@@ -102,10 +102,10 @@
       min_markup: [0.001, 0.01]
       markup_range: [0.0, 0.01]
       n_close_orders: [1, 16]
-      auto_unstuck_wallet_exposure_threshold: [0.5, 0.1]
+      auto_unstuck_wallet_exposure_threshold: [0.0, 1]
       auto_unstuck_ema_dist: [0.01, 0.05]
-      auto_unstuck_delay_minutes: [1, 1000]
-      auto_unstuck_qty_pct: [0.1, 0.5]
+      auto_unstuck_delay_minutes: [0, 0]
+      auto_unstuck_qty_pct: [0, 0]
     }
     short:
     {
@@ -120,10 +120,10 @@
       min_markup: [0.001, 0.01]
       markup_range: [0.0, 0.01]
       n_close_orders: [1, 16]
-      auto_unstuck_wallet_exposure_threshold: [0.5, 0.1]
-      auto_unstuck_ema_dist: [-0.01, 0.05]
-      auto_unstuck_delay_minutes: [1, 1000]
-      auto_unstuck_qty_pct: [0.1, 0.5]
+      auto_unstuck_wallet_exposure_threshold: [0.0, 1]
+      auto_unstuck_ema_dist: [0.01, 0.05]
+      auto_unstuck_delay_minutes: [0, 0]
+      auto_unstuck_qty_pct: [0, 0]
     }
   }
   bounds_neat_grid:
